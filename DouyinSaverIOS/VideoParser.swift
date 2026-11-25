@@ -102,8 +102,8 @@ final class VideoParser {
             if let u = URL(string: shareUrl) {
                 var req = URLRequest(url: u)
                 req.setValue(Self.uaMobile, forHTTPHeaderField: "User-Agent")
-                let (_, resp) = try? await session.dataTask(for: req)
-                if let final = resp?.url?.absoluteString { finalUrl = final }
+                if let (_, resp) = try? await session.data(for: req),
+                   let final = resp.url?.absoluteString { finalUrl = final }
             }
         }
         let bv = Self.firstMatch(#"BV[0-9A-Za-z]{10}"#, in: finalUrl)
@@ -182,8 +182,9 @@ final class VideoParser {
             text = try await getText(apiUrl, headers: ["Cookie": fresh, "User-Agent": Self.uaMobile])
             root = dict(text)
         }
-        guard let r = root, r["success"] as? Bool == true else {
-            let err = (r?["error"] as? [String: Any])?["message"] as? String ?? "服务暂不可用"
+        let success = root?["success"] as? Bool == true
+        guard success, let r = root else {
+            let err = (root?["error"] as? [String: Any])?["message"] as? String ?? "服务暂不可用"
             throw ParseError.api("\(platform == "tiktok" ? "TikTok" : "抖音") 云端解析失败：\(err)")
         }
         guard let data = r["data"] as? [String: Any],
@@ -226,7 +227,7 @@ final class VideoParser {
         req.setValue(Self.referer(for: url), forHTTPHeaderField: "Referer")
         req.setValue("bytes=0-1", forHTTPHeaderField: "Range")
         do {
-            let (_, resp) = try await session.dataTask(for: req)
+            let (_, resp) = try await session.data(for: req)
             let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
             return code == 200 || code == 206
         } catch { return false }
@@ -246,10 +247,10 @@ final class VideoParser {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = "{\"username\":\"\(username)\",\"password\":\"\(password)\"}"
             .data(using: .utf8)
-        let (_, resp) = try await session.dataTask(for: req)
+        let (_, resp) = try await session.data(for: req)
         let http = resp as? HTTPURLResponse
         let setCookie = http?.value(forHTTPHeaderField: "Set-Cookie") ?? ""
-        guard let range = setCookie.range(of: "dtk_session=[^;]+", options: .regularExpression) else {
+        guard let range = setCookie.range(of: "dtk_session=[^;]+", options: String.CompareOptions.regularExpression) else {
             throw ParseError.api("云端登录未返回会话（HTTP \(http?.statusCode ?? 0)）")
         }
         return String(setCookie[range])
@@ -265,7 +266,7 @@ final class VideoParser {
         req.setValue(Self.uaDesktop, forHTTPHeaderField: "User-Agent")
         headers?.forEach { req.setValue($0.value, forHTTPHeaderField: $0.key) }
         if let body = body { req.httpBody = body.data(using: .utf8) }
-        let (data, resp) = try await session.dataTask(for: req)
+        let (data, resp) = try await session.data(for: req)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard code == 200 else { throw ParseError.api("请求失败 HTTP \(code)") }
         return String(data: data, encoding: .utf8) ?? ""
