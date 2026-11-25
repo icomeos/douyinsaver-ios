@@ -1,6 +1,6 @@
 import Foundation
 
-enum DownloadError: LocalizedError {
+enum DownloadError: LocalizedError, Equatable {
     case noUrl
     case http(Int)
     case incomplete
@@ -62,8 +62,8 @@ final class Downloader {
             if consecutiveClosed >= 2 { req.setValue("close", forHTTPHeaderField: "Connection") }
 
             do {
-                // 用 dataTask(for:)（iOS 15+）接收本轮响应体，兼容性最好
-                let (data, resp) = try await session.dataTask(for: req)
+                // 用 data(for:)（iOS 15+）接收本轮响应体，兼容性最好
+                let (data, resp) = try await session.data(for: req)
                 let http = resp as? HTTPURLResponse
                 let code = http?.statusCode ?? 0
                 guard code == 200 || code == 206 else {
